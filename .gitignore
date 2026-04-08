@@ -1,6 +1,7 @@
-dist/
+dist/*
 *.xpi
 *.zip
 .codex
 .DS_Store
 Thumbs.db
+!dist/firefox-reader-0.1.4-unsigned.xpi

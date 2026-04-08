@@ -1,0 +1,6 @@
+dist/
+*.xpi
+*.zip
+.codex
+.DS_Store
+Thumbs.db

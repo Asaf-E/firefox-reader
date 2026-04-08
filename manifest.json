@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Firefox Reader",
+  "version": "0.1.4",
+  "description": "Reader-focused Firefox extension for extracting, rewriting, and continuing web novel chapters.",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "icons": {
+    "48": "icons/firefox-reader.svg",
+    "96": "icons/firefox-reader.svg"
+  },
+  "action": {
+    "default_title": "Open Firefox Reader",
+    "default_icon": {
+      "48": "icons/firefox-reader.svg",
+      "96": "icons/firefox-reader.svg"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "scripts": [
+      "background.js"
+    ]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "firefox-reader@asax.local",
+      "strict_min_version": "121.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

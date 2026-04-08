@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Firefox Reader icon">
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f0e0bf" />
+      <stop offset="100%" stop-color="#d29c61" />
+    </linearGradient>
+    <linearGradient id="page" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0%" stop-color="#fffaf0" />
+      <stop offset="100%" stop-color="#f3e6cf" />
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="28" fill="#18212b" />
+  <rect x="14" y="14" width="100" height="100" rx="22" fill="url(#bg)" />
+  <path d="M34 31h41c11.6 0 21 9.4 21 21v42c-7.3-4.7-14.3-6.5-21-5.5H34c-2.2 0-4-1.8-4-4V35c0-2.2 1.8-4 4-4Z" fill="url(#page)" />
+  <path d="M73 31h7c11.6 0 21 9.4 21 21v39.3c-6.9-4-13.2-5.5-19-4.6l-9 1.4V31Z" fill="#efd9b1" />
+  <path d="M41 48h38M41 59h42M41 70h28" stroke="#6a4b28" stroke-linecap="round" stroke-width="5" />
+  <circle cx="92" cy="91" r="17" fill="#243444" />
+  <path d="m92 82-1.9 9.7 8.4 4.6" fill="none" stroke="#f6efe2" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5" />
+  <circle cx="92" cy="91" r="2.4" fill="#f6efe2" />
+</svg>

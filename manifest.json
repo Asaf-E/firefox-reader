@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Firefox Reader",
-  "version": "0.1.5",
-  "description": "Reader-focused Firefox extension for extracting, rewriting, and continuing web novel chapters.",
+  "name": "Novel Reader",
+  "version": "0.1.6",
+  "description": "Reader-focused extension for extracting, rewriting, and continuing web novel chapters.",
   "permissions": [
     "activeTab",
     "storage",
@@ -16,14 +16,13 @@
     "96": "icons/firefox-reader.svg"
   },
   "action": {
-    "default_title": "Open Firefox Reader",
+    "default_title": "Open Novel Reader",
     "default_icon": {
       "48": "icons/firefox-reader.svg",
       "96": "icons/firefox-reader.svg"
     }
   },
   "background": {
-    "service_worker": "background.js",
     "scripts": [
       "background.js"
     ]
@@ -31,7 +30,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "firefox-reader@asax.local",
-      "strict_min_version": "121.0",
+      "strict_min_version": "142.0",
       "data_collection_permissions": {
         "required": [
           "websiteActivity"

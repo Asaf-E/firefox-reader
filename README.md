@@ -1,6 +1,6 @@
-# Firefox Reader
+# Novel Reader
 
-Firefox Reader is a Firefox extension for reading web novel chapters in a cleaner interface and optionally rewriting awkward translation into more natural English with your own model endpoint.
+Novel Reader is an extension for reading web novel chapters in a cleaner interface and optionally rewriting awkward translation into more natural English with your own model endpoint.
 
 ## What it does
 
@@ -84,13 +84,13 @@ In Firefox:
 
 Current packaged build:
 
-- `dist/firefox-reader-0.1.4-unsigned.xpi`
+- `dist/novel-reader-0.1.6-unsigned.xpi`
 
 ## Packaging
 
 Unsigned local package:
 
-- `dist/firefox-reader-0.1.4-unsigned.xpi`
+- `dist/novel-reader-0.1.6-unsigned.xpi`
 
 For normal permanent install on standard Firefox stable, you will usually want Mozilla signing through AMO.
 

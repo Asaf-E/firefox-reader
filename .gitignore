@@ -6,3 +6,4 @@ dist/*
 Thumbs.db
 !dist/firefox-reader-0.1.4-unsigned.xpi
 !dist/firefox-reader-0.1.5-unsigned.xpi
+!dist/novel-reader-0.1.6-unsigned.xpi

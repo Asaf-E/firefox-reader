@@ -1,4 +1,4 @@
-# Roadmap
+# Novel Reader Roadmap
 
 This roadmap keeps the public repo focused on product direction rather than internal scratch notes.
 

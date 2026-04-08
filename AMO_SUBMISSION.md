@@ -1,4 +1,4 @@
-# Firefox Reader Release Notes
+# Novel Reader Release Notes
 
 This repo now includes a packaged unsigned build in `dist/` and a manifest that is cleaner for Firefox signing.
 
@@ -30,4 +30,4 @@ This repo now includes a packaged unsigned build in `dist/` and a manifest that 
 
 ## Suggested store description seed
 
-Firefox Reader extracts chapter text from web novel pages, rewrites awkward translation into cleaner English with your own model endpoint, and lets you keep reading with saved progress, bookmarks, and chapter continuation.
+Novel Reader extracts chapter text from web novel pages, rewrites awkward translation into cleaner English with your own model endpoint, and lets you keep reading with saved progress, bookmarks, and chapter continuation.

@@ -1,4 +1,4 @@
-# Firefox Reader v0.1.4
+# Novel Reader v0.1.4
 
 ## Highlights
 

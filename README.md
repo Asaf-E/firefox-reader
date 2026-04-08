@@ -67,7 +67,9 @@ Suggested model based on current project testing:
 - [content.js](./content.js)
 - [reader.html](./reader.html)
 - [reader.js](./reader.js)
+- [ROADMAP.md](./ROADMAP.md)
 - [AMO_SUBMISSION.md](./AMO_SUBMISSION.md)
+- [RELEASE_NOTES_v0.1.4.md](./RELEASE_NOTES_v0.1.4.md)
 
 ## Temporary install
 
@@ -95,6 +97,16 @@ For normal permanent install on standard Firefox stable, you will usually want M
 See:
 
 - [AMO_SUBMISSION.md](./AMO_SUBMISSION.md)
+
+## Releases
+
+The `dist/` folder is ignored in git on purpose, so packaged `.xpi` files do not appear in the normal repository file tree on GitHub.
+
+Recommended release flow:
+
+- keep source code in git
+- keep `dist/` out of the repo history
+- attach `.xpi` files to GitHub Releases for tagged versions
 
 ## Development notes
 

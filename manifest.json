@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Firefox Reader",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Reader-focused Firefox extension for extracting, rewriting, and continuing web novel chapters.",
   "permissions": [
     "activeTab",
@@ -31,7 +31,12 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "firefox-reader@asax.local",
-      "strict_min_version": "121.0"
+      "strict_min_version": "121.0",
+      "data_collection_permissions": {
+        "required": [
+          "websiteActivity"
+        ]
+      }
     }
   },
   "content_scripts": [

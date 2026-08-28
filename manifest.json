@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Novel Reader",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Reader-focused extension for extracting, rewriting, and continuing web novel chapters.",
   "permissions": [
     "activeTab",
+    "scripting",
     "storage",
-    "tabs"
+    "tabHide"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -24,6 +25,7 @@
   },
   "background": {
     "scripts": [
+      "chapter-extractor.js",
       "background.js"
     ]
   },
@@ -44,6 +46,7 @@
         "<all_urls>"
       ],
       "js": [
+        "chapter-extractor.js",
         "content.js"
       ],
       "run_at": "document_idle"

@@ -16,6 +16,10 @@
         --shadow: rgba(78, 57, 37, 0.08);
         --text: #1f1f1f;
         --reader-font-size: 20px;
+        --reader-font-family: Georgia, "Times New Roman", serif;
+        --reader-line-height: 1.72;
+        --reader-dim-opacity: 0;
+        --reader-text-strength: 100%;
         --content-width: 980px;
         --input-bg: #fff;
         --input-border: #cbbda7;
@@ -31,6 +35,16 @@
         line-height: 1.5;
         background: var(--bg);
         color: var(--text);
+      }
+
+      body::after {
+        position: fixed;
+        z-index: 2147483647;
+        inset: 0;
+        background: #000;
+        content: "";
+        opacity: var(--reader-dim-opacity);
+        pointer-events: none;
       }
 
       main {
@@ -91,6 +105,28 @@
         background: var(--input-bg);
         color: var(--text);
         padding: 8px 10px;
+      }
+
+      .settings-grid .checkbox-label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .toolbar .checkbox-label {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .toolbar input[type="checkbox"],
+      .settings-grid input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+        padding: 0;
+        accent-color: var(--accent);
       }
 
       .toolbar button,
@@ -268,6 +304,21 @@
         gap: 12px;
       }
 
+      .reading-end-note {
+        grid-column: 1 / -1;
+        text-align: center;
+        color: var(--reading-panel-muted);
+        font-size: 0.95rem;
+        font-style: italic;
+        padding: 16px 18px;
+      }
+
+      .load-sentinel {
+        width: 100%;
+        height: 1px;
+        grid-column: 1 / -1;
+      }
+
       .reading-panel {
         background: var(--reading-panel-bg);
         border: 1px solid var(--reading-panel-border);
@@ -285,8 +336,14 @@
       .reading-body {
         display: grid;
         gap: 14px;
+        color: color-mix(
+          in srgb,
+          var(--reading-panel-text) var(--reader-text-strength),
+          var(--reading-panel-bg)
+        );
+        font-family: var(--reader-font-family);
         font-size: var(--reader-font-size);
-        line-height: 1.72;
+        line-height: var(--reader-line-height);
       }
 
       .reading-body p {
@@ -374,6 +431,7 @@
           <label>
             Font size
             <select id="font-size">
+              <option value="responsive">Responsive</option>
               <option value="12">12</option>
               <option value="16">16</option>
               <option value="20">20</option>
@@ -385,8 +443,26 @@
             </select>
           </label>
           <label>
+            Reading font
+            <select id="font-family">
+              <option value="serif">Serif</option>
+              <option value="sans">Sans serif</option>
+              <option value="humanist">Humanist</option>
+            </select>
+          </label>
+          <label>
+            Line spacing
+            <select id="line-height">
+              <option value="1.5">Compact</option>
+              <option value="1.72">Comfort</option>
+              <option value="1.9">Relaxed</option>
+              <option value="2.1">Extra relaxed</option>
+            </select>
+          </label>
+          <label>
             Width
             <select id="content-width">
+              <option value="responsive">Responsive</option>
               <option value="640">Extra compact</option>
               <option value="720">Compact</option>
               <option value="800">Cozy</option>
@@ -422,6 +498,34 @@
               <option value="midnight">Midnight</option>
             </select>
           </label>
+          <label>
+            Reader brightness
+            <select id="reader-brightness">
+              <option value="100">100%</option>
+              <option value="90">90%</option>
+              <option value="80">80%</option>
+              <option value="70">70%</option>
+              <option value="60">60%</option>
+            </select>
+          </label>
+          <label>
+            Text contrast
+            <select id="text-contrast">
+              <option value="soft">Soft</option>
+              <option value="balanced">Balanced</option>
+              <option value="strong">Strong</option>
+            </select>
+          </label>
+          <button id="long-reading-day" type="button" title="Responsive 21–30px system type, soft contrast, 1.72 spacing, and warm light colors">
+            Long read · Day
+          </button>
+          <button id="long-reading-night" type="button" title="Responsive 21–30px system type, soft contrast, 1.72 spacing, and dark colors">
+            Long read · Night
+          </button>
+          <label class="checkbox-label" title="Disable to prevent manual and automatic AI rewrite requests">
+            <input id="rewrite-enabled" type="checkbox" checked />
+            AI rewrite
+          </label>
           <button id="rewrite-button" type="button">Rewrite text</button>
         </div>
         <div class="toolbar-row">
@@ -444,12 +548,16 @@
             API key
             <input id="api-key" type="password" placeholder="Stored locally in extension storage" />
           </label>
+          <label class="checkbox-label">
+            <input id="auto-rewrite" type="checkbox" />
+            Automatically rewrite chapters when the reader opens
+          </label>
           <div class="toolbar-row">
             <button class="settings-save" id="save-settings" type="button">Save settings</button>
             <span class="notice" id="settings-status"></span>
           </div>
           <p class="settings-note">
-            This stores your endpoint, model, and key in local extension storage for personal use.
+            This stores your endpoint, model, key, and automatic-rewrite preference in local extension storage for personal use.
           </p>
           <div class="settings-help">
             <h3>How rewrite setup works</h3>
@@ -498,6 +606,9 @@
       <p class="notice error" id="error" hidden></p>
       <section class="reading-layout" id="paragraphs"></section>
     </main>
+    <script src="chapter-extractor.js"></script>
+    <script src="legacy-data-migrator.js"></script>
+    <script src="rewrite-client.js"></script>
     <script src="reader.js"></script>
   </body>
 </html>

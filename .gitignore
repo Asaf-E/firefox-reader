@@ -4,6 +4,8 @@ dist/*
 .codex
 .DS_Store
 Thumbs.db
+node_modules/
 !dist/firefox-reader-0.1.4-unsigned.xpi
 !dist/firefox-reader-0.1.5-unsigned.xpi
 !dist/novel-reader-0.1.6-unsigned.xpi
+!dist/novel-reader-0.1.7-unsigned.xpi

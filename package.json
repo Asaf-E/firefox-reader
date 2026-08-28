@@ -1,0 +1,10 @@
+{
+  "name": "novel-reader-extension",
+  "private": true,
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "30.0.1"
+  }
+}

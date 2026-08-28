@@ -9,14 +9,42 @@ const DEFAULT_SETTINGS = {
   model: "",
   apiKey: "",
   mode: "strict_cleanup",
+  rewriteEnabled: true,
+  autoRewrite: false,
   fontSize: "20",
-  viewMode: "side_by_side",
-  pageTheme: "day",
-  panelTheme: "paper",
-  contentWidth: "980"
+  fontFamily: "serif",
+  lineHeight: "1.72",
+  brightness: "100",
+  textContrast: "strong",
+  viewMode: "original",
+  pageTheme: "sand",
+  panelTheme: "parchment",
+  contentWidth: "800"
 };
+const LONG_READING_BASE = Object.freeze({
+  fontSize: "responsive",
+  fontFamily: "sans",
+  lineHeight: "1.72",
+  contentWidth: "responsive",
+  textContrast: "soft"
+});
+const LONG_READING_PRESETS = Object.freeze({
+  day: Object.freeze({
+    ...LONG_READING_BASE,
+    pageTheme: "sand",
+    panelTheme: "parchment",
+    brightness: "80"
+  }),
+  night: Object.freeze({
+    ...LONG_READING_BASE,
+    pageTheme: "night",
+    panelTheme: "ink",
+    brightness: "90"
+  })
+});
 
 const REWRITE_CHUNK_SIZE = 6;
+const rewriteClient = new RewriteClient();
 const MAX_PROTECTED_TERMS = 12;
 const SPEECH_VERBS =
   "say|said|says|tell|told|ask|asked|reply|replied|shout|shouted|whisper|whispered|mutter|muttered|call|called|order|ordered|warn|warned|add|added|remark|remarked|muse|mused|note|noted|creak|creaked";
@@ -33,7 +61,7 @@ const state = {
   chapters: [],
   bookmarks: {},
   currentBooks: {},
-  viewMode: "side_by_side",
+  viewMode: "original",
   improvedText: "",
   improvedParagraphs: [],
   isRewriting: false,
@@ -41,10 +69,13 @@ const state = {
   isAppendingNext: false,
   autoRewriteStarted: false,
   activeChapterIndex: 0,
-  scrollTicking: false
+  scrollTicking: false,
+  endOfContentNotice: "",
+  nextLoadError: ""
 };
 
 const elements = {};
+let loadSentinelObserver = null;
 const PAGE_THEMES = {
   day: {
     bg: "#f6f4ef",
@@ -194,8 +225,25 @@ const PANEL_THEMES = {
     muted: "#b0bccd"
   }
 };
-const CONTENT_WIDTHS = new Set(["640", "720", "800", "860", "980", "1120", "1280"]);
+const CONTENT_WIDTHS = new Set([
+  "responsive",
+  "640",
+  "720",
+  "800",
+  "860",
+  "980",
+  "1120",
+  "1280"
+]);
 const FONT_SIZES = ["12", "16", "20", "24", "28", "32", "36", "40"];
+const FONT_FAMILIES = {
+  serif: 'Georgia, "Times New Roman", serif',
+  sans: 'system-ui, -apple-system, "Segoe UI", sans-serif',
+  humanist: 'Optima, Candara, "Noto Sans", sans-serif'
+};
+const LINE_HEIGHTS = new Set(["1.5", "1.72", "1.9", "2.1"]);
+const BRIGHTNESS_LEVELS = new Set(["60", "70", "80", "90", "100"]);
+const TEXT_CONTRAST_LEVELS = Object.freeze({ soft: "78%", balanced: "88%", strong: "100%" });
 
 function cacheElements() {
   elements.title = document.getElementById("title");
@@ -215,13 +263,21 @@ function cacheElements() {
   elements.rewriteMode = document.getElementById("rewrite-mode");
   elements.viewMode = document.getElementById("view-mode");
   elements.fontSize = document.getElementById("font-size");
+  elements.fontFamily = document.getElementById("font-family");
+  elements.lineHeight = document.getElementById("line-height");
   elements.contentWidth = document.getElementById("content-width");
   elements.pageTheme = document.getElementById("page-theme");
   elements.panelTheme = document.getElementById("panel-theme");
+  elements.brightness = document.getElementById("reader-brightness");
+  elements.textContrast = document.getElementById("text-contrast");
+  elements.longReadingDay = document.getElementById("long-reading-day");
+  elements.longReadingNight = document.getElementById("long-reading-night");
+  elements.rewriteEnabled = document.getElementById("rewrite-enabled");
   elements.rewriteButton = document.getElementById("rewrite-button");
   elements.endpoint = document.getElementById("endpoint");
   elements.model = document.getElementById("model");
   elements.apiKey = document.getElementById("api-key");
+  elements.autoRewrite = document.getElementById("auto-rewrite");
   elements.saveSettings = document.getElementById("save-settings");
   elements.settingsStatus = document.getElementById("settings-status");
 }
@@ -238,12 +294,27 @@ function normalizeSettings(settings) {
   const panelTheme = typeof settings?.panelTheme === "string" ? settings.panelTheme.trim() : "";
   const contentWidth =
     typeof settings?.contentWidth === "string" ? settings.contentWidth.trim() : "";
+  const fontFamily = typeof settings?.fontFamily === "string" ? settings.fontFamily.trim() : "";
+  const lineHeight = typeof settings?.lineHeight === "string" ? settings.lineHeight.trim() : "";
+  const brightness = typeof settings?.brightness === "string" ? settings.brightness.trim() : "";
+  const textContrast =
+    typeof settings?.textContrast === "string" ? settings.textContrast.trim() : "";
   return {
     endpoint: typeof settings?.endpoint === "string" ? settings.endpoint.trim() : "",
     model: typeof settings?.model === "string" ? settings.model.trim() : "",
     apiKey: typeof settings?.apiKey === "string" ? settings.apiKey.trim() : "",
     mode: typeof settings?.mode === "string" ? settings.mode.trim() : DEFAULT_SETTINGS.mode,
+    rewriteEnabled: settings?.rewriteEnabled !== false,
+    autoRewrite: LegacyDataMigrator.autoRewrite(settings),
     fontSize: normalizeFontSizeValue(fontSize),
+    fontFamily: FONT_FAMILIES[fontFamily] ? fontFamily : DEFAULT_SETTINGS.fontFamily,
+    lineHeight: LINE_HEIGHTS.has(lineHeight) ? lineHeight : DEFAULT_SETTINGS.lineHeight,
+    brightness: BRIGHTNESS_LEVELS.has(brightness)
+      ? brightness
+      : DEFAULT_SETTINGS.brightness,
+    textContrast: TEXT_CONTRAST_LEVELS[textContrast]
+      ? textContrast
+      : DEFAULT_SETTINGS.textContrast,
     viewMode: ["original", "side_by_side", "improved"].includes(viewMode)
       ? viewMode
       : DEFAULT_SETTINGS.viewMode,
@@ -255,7 +326,17 @@ function normalizeSettings(settings) {
   };
 }
 
+function withLongReadingPreset(settings, variant = "day") {
+  const preset = LONG_READING_PRESETS[variant] || LONG_READING_PRESETS.day;
+  return { ...(settings || {}), ...preset };
+}
+
+function isRewriteEnabled(settings) {
+  return settings?.rewriteEnabled !== false;
+}
+
 function normalizeFontSizeValue(fontSize) {
+  if (fontSize === "responsive") return fontSize;
   if (!fontSize || !Number.isFinite(Number(fontSize))) {
     return DEFAULT_SETTINGS.fontSize;
   }
@@ -293,6 +374,18 @@ function applyAppearance(settings) {
   const contentWidth = CONTENT_WIDTHS.has(settings?.contentWidth)
     ? settings.contentWidth
     : DEFAULT_SETTINGS.contentWidth;
+  const fontFamily = FONT_FAMILIES[settings?.fontFamily]
+    ? settings.fontFamily
+    : DEFAULT_SETTINGS.fontFamily;
+  const lineHeight = LINE_HEIGHTS.has(settings?.lineHeight)
+    ? settings.lineHeight
+    : DEFAULT_SETTINGS.lineHeight;
+  const brightness = BRIGHTNESS_LEVELS.has(settings?.brightness)
+    ? settings.brightness
+    : DEFAULT_SETTINGS.brightness;
+  const textContrast = TEXT_CONTRAST_LEVELS[settings?.textContrast]
+    ? settings.textContrast
+    : DEFAULT_SETTINGS.textContrast;
 
   root.style.setProperty("--bg", pageTheme.bg);
   root.style.setProperty("--panel", pageTheme.panel);
@@ -308,8 +401,18 @@ function applyAppearance(settings) {
   root.style.setProperty("--reading-panel-border", panelTheme.border);
   root.style.setProperty("--reading-panel-text", panelTheme.text);
   root.style.setProperty("--reading-panel-muted", panelTheme.muted);
-  root.style.setProperty("--reader-font-size", `${fontSize}px`);
-  root.style.setProperty("--content-width", `${contentWidth}px`);
+  root.style.setProperty(
+    "--reader-font-size",
+    fontSize === "responsive" ? "clamp(21px, calc(15px + 0.4vw), 30px)" : `${fontSize}px`
+  );
+  root.style.setProperty("--reader-font-family", FONT_FAMILIES[fontFamily]);
+  root.style.setProperty("--reader-line-height", lineHeight);
+  root.style.setProperty("--reader-dim-opacity", String((100 - Number(brightness)) / 100));
+  root.style.setProperty("--reader-text-strength", TEXT_CONTRAST_LEVELS[textContrast]);
+  root.style.setProperty(
+    "--content-width",
+    contentWidth === "responsive" ? "clamp(640px, 26vw, 900px)" : `${contentWidth}px`
+  );
   root.style.colorScheme = pageTheme.colorScheme;
 }
 
@@ -333,22 +436,6 @@ function setStatus(message) {
 
   elements.status.hidden = false;
   elements.status.textContent = message;
-}
-
-function looksLikeChapterUrl(url) {
-  if (!url) return false;
-
-  try {
-    const { pathname } = new URL(url);
-    return (
-      /\/chapter(?:\/|-\d)/i.test(pathname) ||
-      /chapter-\d+/i.test(pathname) ||
-      /\/\d+-\d+\/?$/i.test(pathname) ||
-      /\/\d+\.html$/i.test(pathname)
-    );
-  } catch (error) {
-    return false;
-  }
 }
 
 function getParagraphs() {
@@ -592,7 +679,67 @@ function renderText() {
     );
   }
 
+  if (state.endOfContentNotice) {
+    const endNote = document.createElement("div");
+    endNote.className = "reading-end-note panel";
+    endNote.textContent = state.endOfContentNotice;
+    elements.paragraphs.appendChild(endNote);
+  }
+
+  if (state.nextLoadError) {
+    const retryNote = document.createElement("div");
+    retryNote.className = "reading-end-note panel";
+
+    const message = document.createElement("p");
+    message.textContent = state.nextLoadError;
+    retryNote.appendChild(message);
+
+    const retryButton = document.createElement("button");
+    retryButton.type = "button";
+    retryButton.className = "panel-clear";
+    retryButton.textContent = "Retry loading next chapter";
+    retryButton.addEventListener("click", () => {
+      state.nextLoadError = "";
+      loadNextChapter().catch((error) => {
+        state.nextLoadError = error.message || "The next chapter could not be loaded.";
+        renderText();
+      });
+    });
+    retryNote.appendChild(retryButton);
+    elements.paragraphs.appendChild(retryNote);
+  }
+
+  const sentinel = document.createElement("div");
+  sentinel.className = "load-sentinel";
+  sentinel.setAttribute("aria-hidden", "true");
+  elements.paragraphs.appendChild(sentinel);
+  attachLoadSentinel(sentinel);
+
   updateRewriteStatus();
+}
+
+function attachLoadSentinel(target) {
+  if (loadSentinelObserver) {
+    loadSentinelObserver.disconnect();
+    loadSentinelObserver = null;
+  }
+
+  if (!target || typeof IntersectionObserver !== "function") return;
+
+  loadSentinelObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        maybeLoadNextChapterSoon();
+      }
+    },
+    {
+      root: null,
+      rootMargin: "700px 0px 700px 0px",
+      threshold: 0
+    }
+  );
+
+  loadSentinelObserver.observe(target);
 }
 
 function renderBookmarks() {
@@ -719,11 +866,17 @@ function populateSettingsForm() {
   elements.endpoint.value = settings.endpoint || "";
   elements.model.value = settings.model || "";
   elements.apiKey.value = settings.apiKey || "";
+  elements.autoRewrite.checked = settings.autoRewrite === true;
+  elements.rewriteEnabled.checked = settings.rewriteEnabled !== false;
   elements.rewriteMode.value = settings.mode || "strict_cleanup";
   elements.fontSize.value = settings.fontSize || DEFAULT_SETTINGS.fontSize;
+  elements.fontFamily.value = settings.fontFamily || DEFAULT_SETTINGS.fontFamily;
+  elements.lineHeight.value = settings.lineHeight || DEFAULT_SETTINGS.lineHeight;
   elements.contentWidth.value = settings.contentWidth || DEFAULT_SETTINGS.contentWidth;
   elements.pageTheme.value = settings.pageTheme || DEFAULT_SETTINGS.pageTheme;
   elements.panelTheme.value = settings.panelTheme || DEFAULT_SETTINGS.panelTheme;
+  elements.brightness.value = settings.brightness || DEFAULT_SETTINGS.brightness;
+  elements.textContrast.value = settings.textContrast || DEFAULT_SETTINGS.textContrast;
   state.viewMode = settings.viewMode || DEFAULT_SETTINGS.viewMode;
   applyAppearance(settings);
 }
@@ -734,19 +887,29 @@ function collectSettingsForm() {
     model: elements.model.value,
     apiKey: elements.apiKey.value,
     mode: elements.rewriteMode.value,
+    rewriteEnabled: elements.rewriteEnabled.checked,
+    autoRewrite: elements.autoRewrite.checked,
     fontSize: elements.fontSize.value,
+    fontFamily: elements.fontFamily.value,
+    lineHeight: elements.lineHeight.value,
     viewMode: state.viewMode,
     contentWidth: elements.contentWidth.value,
     pageTheme: elements.pageTheme.value,
-    panelTheme: elements.panelTheme.value
+    panelTheme: elements.panelTheme.value,
+    brightness: elements.brightness.value,
+    textContrast: elements.textContrast.value
   };
 }
 
 function syncControls() {
+  const rewriteEnabled = isRewriteEnabled(state.settings);
   elements.toolbar.hidden = false;
   elements.settings.hidden = false;
   elements.viewMode.value = state.viewMode;
-  elements.rewriteButton.disabled = state.isRewriting || getParagraphs().length === 0;
+  elements.rewriteEnabled.checked = rewriteEnabled;
+  elements.autoRewrite.disabled = !rewriteEnabled;
+  elements.rewriteButton.disabled =
+    !rewriteEnabled || state.isRewriting || getParagraphs().length === 0;
   elements.rewriteButton.textContent = state.isRewriting ? "Rewriting..." : "Rewrite text";
 }
 
@@ -970,6 +1133,7 @@ function buildChunkPrompt(payload) {
     "Do not merge, split, drop, or repeat paragraphs.",
     "Do not add new descriptions, emotional flavor, or inferred meaning.",
     "Do not turn brief narration into more dramatic prose.",
+    "Do not prefix paragraphs with numbers, bullets, 'Paragraph 1', or any list marker.",
     "Return each paragraph in this exact machine-readable format:",
     "[[1]] rewritten paragraph 1",
     "[[2]] rewritten paragraph 2",
@@ -990,7 +1154,24 @@ function stripParagraphMarkers(text) {
     .replace(/^\[\d+\]\s*/gm, "")
     .replace(/^\[\[\d+\]\]\s*/gm, "")
     .replace(/^\d+[.)]\s+/gm, "")
+    .replace(/^\d+\s*[:.-]\s+/gm, "")
+    .replace(/^(?:paragraph|para)\s+\d+\s*[:.)-]\s*/gim, "")
     .trim();
+}
+
+function startsWithArtificialNumbering(text) {
+  return /^(?:\d+[.):-]|\d+\s+-|(?:paragraph|para)\s+\d+\s*[:.)-])/i.test(text.trim());
+}
+
+function normalizeRewriteParagraph(source, rewritten) {
+  const original = source.trim();
+  const next = rewritten.trim();
+
+  if (!next) return next;
+  if (startsWithArtificialNumbering(original)) return next;
+  if (!startsWithArtificialNumbering(next)) return next;
+
+  return stripParagraphMarkers(next);
 }
 
 function parseChunkResponse(text, expectedCount) {
@@ -999,18 +1180,23 @@ function parseChunkResponse(text, expectedCount) {
     normalized.matchAll(/\[\[(\d+)\]\]\s*([\s\S]*?)(?=\n\s*\[\[\d+\]\]|\s*$)/g)
   );
 
-  if (matches.length === expectedCount) {
+  if (matches.length > 0) {
+    if (matches.length !== expectedCount) return null;
+
     const byIndex = new Map();
     for (const match of matches) {
       const index = Number(match[1]);
       byIndex.set(index, stripParagraphMarkers(match[2]));
     }
 
+    if (byIndex.size !== expectedCount) return null;
+
     const ordered = Array.from({ length: expectedCount }, (_, index) =>
       byIndex.get(index + 1) || ""
     );
 
     if (ordered.every(Boolean)) return ordered;
+    return null;
   }
 
   const fallback = stripParagraphMarkers(normalized)
@@ -1093,7 +1279,7 @@ function hasSensitiveQuantityDrift(source, rewritten) {
 
 function validateParagraphRewrite(source, rewritten, mode) {
   const original = source.trim();
-  const next = rewritten.trim();
+  const next = normalizeRewriteParagraph(source, rewritten);
   const reasons = [];
 
   if (!next) {
@@ -1142,10 +1328,12 @@ function validateChunkRewrite(sourceParagraphs, rewrittenParagraphs, mode) {
   }
 
   const warnings = [];
-  const nextParagraphs = [...rewrittenParagraphs];
+  const nextParagraphs = sourceParagraphs.map((source, index) =>
+    normalizeRewriteParagraph(source, rewrittenParagraphs[index] || "")
+  );
 
   for (const [index, source] of sourceParagraphs.entries()) {
-    const validation = validateParagraphRewrite(source, rewrittenParagraphs[index], mode);
+    const validation = validateParagraphRewrite(source, nextParagraphs[index], mode);
     if (!validation.valid) {
       warnings.push(`paragraph ${index + 1}: ${validation.reasons.join(", ")}`);
       nextParagraphs[index] = source;
@@ -1187,100 +1375,35 @@ function createChunks(paragraphs, size) {
   return chunks;
 }
 
-async function readErrorResponse(response) {
-  const contentType = response.headers.get("content-type") || "";
-
-  if (contentType.includes("application/json")) {
-    const data = await response.json().catch(() => null);
-    const message = data?.error?.message || data?.message;
-    return message || `Request failed with status ${response.status}`;
-  }
-
-  const text = await response.text().catch(() => "");
-  return text || `Request failed with status ${response.status}`;
-}
-
-function extractResponseText(data) {
-  const direct = data?.choices?.[0]?.message?.content;
-  if (typeof direct === "string" && direct.trim()) return stripParagraphMarkers(direct);
-
-  if (Array.isArray(direct)) {
-    const joined = direct
-      .map((item) => item?.text || item?.content || "")
-      .join("")
-      .trim();
-    if (joined) return stripParagraphMarkers(joined);
-  }
-
-  if (typeof data?.output_text === "string" && data.output_text.trim()) {
-    return stripParagraphMarkers(data.output_text);
-  }
-
-  const output = data?.output?.flatMap((item) => item?.content || []) || [];
-  const text = output
-    .map((item) => item?.text || "")
-    .join("")
-    .trim();
-
-  if (text) return stripParagraphMarkers(text);
-
-  throw new Error(
-    "The model returned no final text. If you're using a reasoning model in LM Studio, try a non-reasoning instruct model for rewriting."
-  );
-}
-
 async function rewriteChunk(payload) {
   const settings = {
     ...(await getStoredSettings()),
     ...normalizeSettings(payload?.settings)
   };
 
-  if (!settings.endpoint) throw new Error("Set an API endpoint before rewriting.");
-  if (!settings.model) throw new Error("Set a model before rewriting.");
   if (!Array.isArray(payload?.paragraphs) || payload.paragraphs.length === 0) {
     throw new Error("No extracted text is available to rewrite.");
   }
-
-  const headers = {
-    "Content-Type": "application/json"
-  };
-
-  if (settings.apiKey) {
-    headers.Authorization = `Bearer ${settings.apiKey}`;
-  }
-
-  const response = await fetch(settings.endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: settings.model,
-      temperature: 0.2,
-      messages: [
-        {
-          role: "system",
-          content: buildSystemPrompt(payload.mode)
-        },
-        {
-          role: "user",
-          content: buildChunkPrompt(payload)
-        }
-      ]
-    })
+  const text = await rewriteClient.complete({
+    endpoint: settings.endpoint,
+    apiKey: settings.apiKey,
+    model: settings.model,
+    messages: [
+      { role: "system", content: buildSystemPrompt(payload.mode) },
+      { role: "user", content: buildChunkPrompt(payload) }
+    ]
   });
-
-  if (!response.ok) {
-    throw new Error(await readErrorResponse(response));
-  }
-
-  return extractResponseText(await response.json());
+  return stripParagraphMarkers(text);
 }
 
 async function loadCapture() {
   const stored = await browser.storage.local.get(CAPTURE_KEY);
-  state.capture = stored[CAPTURE_KEY] || null;
+  state.capture = LegacyDataMigrator.capture(stored[CAPTURE_KEY] || null);
   state.improvedText = "";
   state.improvedParagraphs = [];
   state.rewriteNotice = "";
+  state.endOfContentNotice = "";
+  state.nextLoadError = "";
   state.chapters = [];
   state.activeChapterIndex = -1;
 
@@ -1340,7 +1463,9 @@ async function loadBookmarks() {
 }
 
 async function loadCurrentBooks() {
-  state.currentBooks = await getStoredCurrentBooks();
+  const { value, changed } = LegacyDataMigrator.currentBooks(await getStoredCurrentBooks());
+  state.currentBooks = value;
+  if (changed) await saveStoredCurrentBooks(value);
   renderResumeList();
 }
 
@@ -1529,7 +1654,12 @@ async function updateCurrentChapterFromViewport() {
 
 function canAutoRewrite() {
   const settings = state.settings || {};
-  return Boolean(settings.endpoint && settings.model);
+  return Boolean(
+    isRewriteEnabled(settings) &&
+      settings.autoRewrite &&
+      settings.endpoint &&
+      settings.model
+  );
 }
 
 function updateImprovedTextFromParagraphs() {
@@ -1620,6 +1750,7 @@ async function saveSettings() {
 }
 
 async function rewriteText() {
+  if (!isRewriteEnabled(state.settings)) return;
   if (state.isRewriting || getParagraphs().length === 0) return;
 
   state.isRewriting = true;
@@ -1672,6 +1803,9 @@ async function rewriteText() {
     state.isRewriting = false;
     updateRewriteStatus();
     syncControls();
+    window.requestAnimationFrame(() => {
+      maybeLoadNextChapterSoon();
+    });
   }
 }
 
@@ -1680,6 +1814,8 @@ async function loadNextChapter() {
   if (!state.capture?.nextUrl) return;
 
   state.isAppendingNext = true;
+  state.endOfContentNotice = "";
+  state.nextLoadError = "";
   state.rewriteNotice = "Loading the next chapter...";
   renderText();
 
@@ -1726,29 +1862,38 @@ async function loadNextChapter() {
       renderText();
 
       if (canAutoRewrite()) {
-        const result = await rewriteParagraphBatch(nextParagraphs, {
-          title: payload.title,
-          url: payload.url,
-          prevText: previousText,
-          onChunkStart: (index, total) => {
-            state.rewriteNotice = `Loading next chapter: rewriting chunk ${index + 1} of ${total}...`;
-            renderText();
-          },
-          onChunkComplete: (_index, start, chunkParagraphs) => {
-            for (const [itemIndex, text] of chunkParagraphs.entries()) {
-              state.improvedParagraphs[markerIndex + start + itemIndex] = text;
+        try {
+          const result = await rewriteParagraphBatch(nextParagraphs, {
+            title: payload.title,
+            url: payload.url,
+            prevText: previousText,
+            onChunkStart: (index, total) => {
+              state.rewriteNotice = `Loading next chapter: rewriting chunk ${index + 1} of ${total}...`;
+              renderText();
+            },
+            onChunkComplete: (_index, start, chunkParagraphs) => {
+              for (const [itemIndex, text] of chunkParagraphs.entries()) {
+                state.improvedParagraphs[markerIndex + start + itemIndex] = text;
+              }
+              updateImprovedTextFromParagraphs();
+              renderText();
             }
-            updateImprovedTextFromParagraphs();
-            renderText();
+          });
+
+          if (result.warnings.length > 0) {
+            console.warn("Next chapter rewrite validation warnings:", result.warnings);
           }
-        });
 
-        if (result.warnings.length > 0) {
-          console.warn("Next chapter rewrite validation warnings:", result.warnings);
+          updateImprovedTextFromParagraphs();
+          state.rewriteNotice = "Loaded the next chapter.";
+        } catch (error) {
+          console.warn("Next chapter rewrite failed; keeping original text for that chapter.", error);
+          for (const [itemIndex, text] of nextParagraphs.entries()) {
+            state.improvedParagraphs[markerIndex + itemIndex] = text;
+          }
+          updateImprovedTextFromParagraphs();
+          state.rewriteNotice = "Loaded the next chapter. Rewrite failed for that chapter, so the original text was kept.";
         }
-
-        updateImprovedTextFromParagraphs();
-        state.rewriteNotice = "Loaded the next chapter.";
       } else {
         state.improvedParagraphs.splice(markerIndex, nextParagraphs.length);
         updateImprovedTextFromParagraphs();
@@ -1759,35 +1904,56 @@ async function loadNextChapter() {
     }
 
     if (!state.capture.nextUrl) {
+      state.endOfContentNotice = "Reached the end of the available chapters.";
       await bookmarkChapterIfNeeded(state.chapters[state.chapters.length - 1]);
     }
 
     renderText();
     scheduleCurrentChapterUpdate();
-    maybeLoadNextChapterSoon();
   } catch (error) {
     console.warn("Failed to append the next chapter.", error);
-    state.rewriteNotice = "Reached the end of the current loaded content.";
-    state.capture.nextUrl = "";
-    await bookmarkChapterIfNeeded(state.chapters[state.chapters.length - 1]);
+    state.rewriteNotice = "";
+    state.nextLoadError =
+      error?.message || "The next chapter could not be loaded. Please try again.";
     renderText();
     scheduleCurrentChapterUpdate();
   } finally {
     state.isAppendingNext = false;
+    window.requestAnimationFrame(() => {
+      maybeLoadNextChapterSoon();
+    });
   }
 }
 
 function maybeLoadNextChapterSoon() {
   if (state.isAppendingNext || state.isRewriting) return;
+  if (state.nextLoadError) return;
   if (!state.capture?.nextUrl) return;
 
+  const scrollHeight = Math.max(
+    document.documentElement.scrollHeight || 0,
+    document.body?.scrollHeight || 0
+  );
   const nearBottom =
-    window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 600;
+    window.innerHeight + window.scrollY >= scrollHeight - 600;
   if (nearBottom) {
     loadNextChapter().catch((error) => {
       console.warn("Failed to load the next chapter.", error);
     });
   }
+}
+
+function bindAppearanceControl(element, key) {
+  element.addEventListener("change", async () => {
+    if (!state.settings) return;
+    state.settings[key] = element.value;
+    applyAppearance(state.settings);
+    try {
+      state.settings = await saveStoredSettings(state.settings);
+    } catch (error) {
+      console.warn(`Failed to save ${key} preference.`, error);
+    }
+  });
 }
 
 function bindEvents() {
@@ -1815,63 +1981,49 @@ function bindEvents() {
     }
   });
 
-  elements.fontSize.addEventListener("change", async () => {
+  for (const [element, key] of [
+    [elements.fontSize, "fontSize"],
+    [elements.fontFamily, "fontFamily"],
+    [elements.lineHeight, "lineHeight"],
+    [elements.contentWidth, "contentWidth"],
+    [elements.pageTheme, "pageTheme"],
+    [elements.panelTheme, "panelTheme"],
+    [elements.brightness, "brightness"],
+    [elements.textContrast, "textContrast"]
+  ]) {
+    bindAppearanceControl(element, key);
+  }
+
+  for (const [element, variant] of [
+    [elements.longReadingDay, "day"],
+    [elements.longReadingNight, "night"]
+  ]) {
+    element.addEventListener("click", async () => {
+      if (!state.settings) return;
+      state.settings = withLongReadingPreset(state.settings, variant);
+      populateSettingsForm();
+      syncControls();
+      elements.selectionStatus.textContent =
+        `Long-reading ${variant} preset applied. You can still adjust each setting.`;
+      try {
+        state.settings = await saveStoredSettings(state.settings);
+      } catch (error) {
+        console.warn("Failed to save long-reading preset.", error);
+      }
+    });
+  }
+
+  elements.rewriteEnabled.addEventListener("change", async () => {
     if (!state.settings) return;
-    state.settings.fontSize = elements.fontSize.value;
-    applyAppearance(state.settings);
-
+    state.settings.rewriteEnabled = elements.rewriteEnabled.checked;
+    syncControls();
+    elements.selectionStatus.textContent = state.settings.rewriteEnabled
+      ? "AI rewrite enabled."
+      : "AI rewrite disabled. Original reading remains available.";
     try {
-      state.settings = await saveStoredSettings({
-        ...state.settings,
-        fontSize: elements.fontSize.value
-      });
+      state.settings = await saveStoredSettings(state.settings);
     } catch (error) {
-      console.warn("Failed to save font size preference.", error);
-    }
-  });
-
-  elements.contentWidth.addEventListener("change", async () => {
-    if (!state.settings) return;
-    state.settings.contentWidth = elements.contentWidth.value;
-    applyAppearance(state.settings);
-
-    try {
-      state.settings = await saveStoredSettings({
-        ...state.settings,
-        contentWidth: elements.contentWidth.value
-      });
-    } catch (error) {
-      console.warn("Failed to save content width preference.", error);
-    }
-  });
-
-  elements.pageTheme.addEventListener("change", async () => {
-    if (!state.settings) return;
-    state.settings.pageTheme = elements.pageTheme.value;
-    applyAppearance(state.settings);
-
-    try {
-      state.settings = await saveStoredSettings({
-        ...state.settings,
-        pageTheme: elements.pageTheme.value
-      });
-    } catch (error) {
-      console.warn("Failed to save page theme preference.", error);
-    }
-  });
-
-  elements.panelTheme.addEventListener("change", async () => {
-    if (!state.settings) return;
-    state.settings.panelTheme = elements.panelTheme.value;
-    applyAppearance(state.settings);
-
-    try {
-      state.settings = await saveStoredSettings({
-        ...state.settings,
-        panelTheme: elements.panelTheme.value
-      });
-    } catch (error) {
-      console.warn("Failed to save panel theme preference.", error);
+      console.warn("Failed to save AI rewrite preference.", error);
     }
   });
 
